@@ -11,10 +11,26 @@ const embed=(title,description)=>({title,description,color:0x5865f2,footer:{text
 const reply=embeds=>({embeds,allowedMentions:{parse:[]}});
 export async function handleInteraction(i,config) {
  if (!i.isChatInputCommand() || i.commandName!=='gridlok') return;
+ let isPublic=false;
  try {
-  await i.deferReply({flags:64});
   const sub=i.options.getSubcommand();
+  isPublic=sub==='progress';
+  await i.deferReply(isPublic ? {} : {flags:64});
   const tasks=(await queryTasks(config)).filter(p=>p.object!=='data_source' && p.properties);
+  if (sub==='progress') {
+   const groups=new Map(); let done=0;
+   for (const task of tasks) {
+    const key=prop(task,'Workstream').select?.name || null;
+    const group=groups.get(key) || {total:0,done:0};
+    group.total++; if (status(task)==='Done') {group.done++; done++} groups.set(key,group);
+   }
+   const bar=(completed,total)=>{const percent=total ? Math.round(completed*100/total) : 0; const filled=Math.round(percent/10); return `\`${'█'.repeat(filled)}${'░'.repeat(10-filled)}\` **${percent}%** • ${completed} / ${total} done`};
+   const entries=[...groups].sort((a,b)=>a[0]===null?1:b[0]===null?-1:a[0].localeCompare(b[0]));
+   const pages=Math.max(1,Math.ceil(entries.length/10)); const page=Math.min(pages,Math.max(1,i.options.getInteger('page') || 1));
+   const lines=entries.slice((page-1)*10,page*10).map(([name,g])=>`**${name===null?'Unassigned':clean(name,120)}**\n${bar(g.done,g.total)}`);
+   const description=`**Overall progress**\n${bar(done,tasks.length)}\n\n**Workstreams**\n${lines.join('\n\n') || 'No tasks yet.'}\n\nPage ${page} of ${pages} • Percentages rounded to nearest whole percent.`;
+   return await i.editReply(reply([{title:'📊 GRIDLOK Progress',description,color:0x5865f2,footer:{text:'GRIDLOK • Read-only • Public board summary'}}]));
+  }
   if (sub==='detail') {
    const id=(i.options.getString('id') || '').replace(/-/g,'').toLowerCase();
    const task=tasks.find(p=>p.id.replace(/-/g,'').toLowerCase()===id);
@@ -35,7 +51,9 @@ export async function handleInteraction(i,config) {
   return await i.editReply(reply([embed(sub==='search'?'Search results':'GRIDLOK tasks',description.slice(0,4096))]));
  } catch (error) {
   const message=error?.message?.match(/^Notion request failed \(HTTP \d+; [\w-]+\)$/)?.[0] || 'Could not load tasks. Check configuration, connectivity and Notion access.';
-  const payload=reply([embed('Unable to load GRIDLOK',message)]);
+  const failure=embed('Unable to load GRIDLOK',message);
+  if (isPublic) failure.footer.text='GRIDLOK • Read-only • Public response';
+  const payload=reply([failure]);
   try { if (i.deferred || i.defer || i.replied) await i.editReply(payload); else await i.reply({...payload,flags:64}); } catch { /* interaction expired or unavailable */ }
  }
 }

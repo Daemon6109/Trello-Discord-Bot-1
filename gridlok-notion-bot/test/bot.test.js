@@ -27,3 +27,33 @@ test('large untrusted data and out of range pages respect Discord limits',async(
  const i=interaction('list',{page:999}); await handleInteraction(i,{token:'x',dataSourceId:'x',fetcher:async()=>({ok:true,json:async()=>({results:items,has_more:false})})});
  assert.match(JSON.stringify(i.result),/Page 2/); assert.ok(i.result.embeds[0].description.length<=4096); assert.deepEqual(i.result.allowedMentions,{parse:[]});
 });
+
+
+test('progress publicly aggregates Done overall and by workstream',async()=>{
+ const {handleInteraction}=await import('../src/bot.js');
+ const items=[page(1,'Done'),page(2,'Ready'),page(3,'Done')];
+ items[0].properties.Workstream={select:{name:'Alpha'}}; items[1].properties.Workstream={select:{name:'Alpha'}};
+ const i=interaction('progress'); await handleInteraction(i,{fetcher:async()=>({ok:true,json:async()=>({results:items,has_more:false})})});
+ assert.notEqual(i.defer.flags,64); assert.deepEqual(i.result.allowedMentions,{parse:[]});
+ const text=JSON.stringify(i.result); assert.match(text,/67%/); assert.match(text,/2\s*\/\s*3/); assert.match(text,/Alpha/); assert.match(text,/50%/); assert.match(text,/Unassigned/); assert.match(text,/100%/);
+});
+
+
+test('progress empty board and public failure communicate visibility correctly',async()=>{
+ const {handleInteraction}=await import('../src/bot.js');
+ const i=interaction('progress'); await handleInteraction(i,{fetcher:async()=>({ok:true,json:async()=>({results:[],has_more:false})})});
+ assert.match(i.result.embeds[0].description,/0%.*0 \/ 0/); assert.match(i.result.embeds[0].description,/No tasks/);
+ const e=interaction('progress'); await handleInteraction(e,{fetcher:async()=>{throw Error('sensitive')}});
+ assert.doesNotMatch(JSON.stringify(e.result),/visible only to you|sensitive/);
+});
+
+test('progress paginates many hostile workstreams within Discord limits',async()=>{
+ const {handleInteraction}=await import('../src/bot.js');
+ const items=Array.from({length:31},(_,n)=>{const p=page(n,n%2?'Done':'Ready'); p.properties.Workstream={select:{name:`${String(n).padStart(2,'0')} @everyone `+'*'.repeat(2000)}}; return p});
+ const config={fetcher:async()=>({ok:true,json:async()=>({results:items,has_more:false})})};
+ const i=interaction('progress',{page:999}); await handleInteraction(i,config);
+ assert.match(i.result.embeds[0].description,/Page 4 of 4/); assert.match(i.result.embeds[0].description,/15 \/ 31/);
+ const first=interaction('progress'); await handleInteraction(first,config); const e=first.result.embeds[0];
+ assert.ok(e.title.length<=256); assert.ok(e.description.length<=4096); assert.ok(e.title.length+e.description.length+e.footer.text.length<=6000);
+ assert.deepEqual(first.result.allowedMentions,{parse:[]}); assert.doesNotMatch(e.description,/@everyone/);
+});

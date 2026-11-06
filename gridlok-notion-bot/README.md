@@ -7,8 +7,9 @@ A standalone, read-only Discord slash-command bot for the GRIDLOK Notion task da
 - `/gridlok list [status] [page]` — tasks grouped by status, 20 per page.
 - `/gridlok search query [status] [page]` — case-insensitive task-title search.
 - `/gridlok detail id` — properties of one task, using the full ID from list/search. Related tasks are shown by ID, not resolved titles.
+- `/gridlok progress [page]` — **public** completion dashboard: overall and per Workstream, with counts and progress bars. Ten workstreams per page; run the command again with another page number to see more. Only tasks whose Status is exactly `Done` count as complete; missing Workstream values are grouped as Unassigned. Percentages are rounded to the nearest whole percent, with an empty board shown as 0% (0 / 0). Bar segments are rounded to the nearest 10 percentage points. This is a text embed, not an image.
 
-Replies are private (ephemeral) to the caller, and mentions are disabled. Users can still copy or screenshot results: restrict who can invoke commands in server Integrations settings. The bot exposes all tasks the integration can read to anyone allowed to invoke it, regardless of individual Notion permissions. Notion links only work for users with their own access. Do not enable this for an untrusted audience.
+**Warning: `/gridlok progress` reveals board data publicly**, including workstream names and task counts, to everyone who can view the channel. Restrict command and channel permissions accordingly. List, search and detail replies remain private (ephemeral) to the caller; mentions are disabled for all replies. Users can still copy or screenshot results. The bot exposes all tasks the integration can read to anyone allowed to invoke private commands, regardless of individual Notion permissions. Notion links only work for users with their own access. Do not enable this for an untrusted audience.
 
 ## Setup
 
